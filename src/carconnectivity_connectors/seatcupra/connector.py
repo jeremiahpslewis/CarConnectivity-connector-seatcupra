@@ -840,7 +840,22 @@ class Connector(BaseConnector):
                     else:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'charging', charging_status, {'status', 'targetPct', 'currentPct', 'chargeMode', 'remainingTime'})
+                    log_extra_keys(
+                        LOG_API,
+                        'charging',
+                        charging_status,
+                        {
+                            'status',
+                            'targetPct',
+                            'currentPct',
+                            'chargeMode',
+                            'remainingTime',
+                            'progressBarPct',
+                            'active',
+                            'preferredChargeMode',
+                            'chargeSettings',
+                        }
+                    )
                 else:
                     if isinstance(vehicle, ElectricVehicle):
                         vehicle.charging.enabled = False
