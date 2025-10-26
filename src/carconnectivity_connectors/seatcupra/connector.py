@@ -388,7 +388,23 @@ class Connector(BaseConnector):
                                 else:
                                     vehicle.model_year._set_value(None)  # pylint: disable=protected-access
                                 log_extra_keys(LOG_API, 'factoryModel', factory_model,  {'vehicleBrand', 'vehicleModel', 'modYear'})
-                            log_extra_keys(LOG_API, 'specifications', vehicle_dict['specifications'],  {'steeringRight', 'factoryModel'})
+                            log_extra_keys(
+                                LOG_API,
+                                'specifications',
+                                vehicle_dict['specifications'],
+                                {
+                                    'steeringRight',
+                                    'factoryModel',
+                                    'salesType',
+                                    'colors',
+                                    'wheels',
+                                    'sunroof',
+                                    'heatedSeats',
+                                    'marketEntry',
+                                    'modVersion',
+                                    'carBody'
+                                }
+                            )
 
                         if isinstance(vehicle, SeatCupraVehicle):
                             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/user/{self.session.user_id}/vehicle/{vin}/capabilities'
