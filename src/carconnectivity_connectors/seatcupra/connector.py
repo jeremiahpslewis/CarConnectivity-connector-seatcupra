@@ -1128,7 +1128,17 @@ class Connector(BaseConnector):
                         vehicle.climatization.enabled = bool(climatisation_status['active'])
                     elif 'active' in climatisation_status:
                         vehicle.climatization.enabled = None
-                log_extra_keys(LOG_API, 'climatisationStatus', data['climatisationStatus'], {'carCapturedTimestamp', 'climatisationState'})
+                log_extra_keys(
+                    LOG_API,
+                    'climatisationStatus',
+                    data['climatisationStatus'],
+                    {
+                        'carCapturedTimestamp',
+                        'climatisationState',
+                        'climatisationTrigger',
+                        'remainingClimatisationTimeInMinutes',
+                    }
+                )
             else:
                 vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
             if 'windowHeatingStatus' in data and data['windowHeatingStatus'] is not None:
