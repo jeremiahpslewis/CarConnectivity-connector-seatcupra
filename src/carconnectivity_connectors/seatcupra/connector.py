@@ -861,8 +861,20 @@ class Connector(BaseConnector):
                         elif 'active' in climatisation_status:
                             vehicle.climatization.enabled = None
                     # we take status, targetTemperatureCelsius, targetTemperatureFahrenheit, from climatization request
-                    log_extra_keys(LOG_API, 'climatisation', climatisation_status, {'status', 'targetTemperatureCelsius', 'targetTemperatureFahrenheit',
-                                                                                   'remainingTime'})
+                    log_extra_keys(
+                        LOG_API,
+                        'climatisation',
+                        climatisation_status,
+                        {
+                            'status',
+                            'targetTemperatureCelsius',
+                            'targetTemperatureFahrenheit',
+                            'remainingTime',
+                            'climatisationTrigger',
+                            'active',
+                            'progressBarPct'
+                        }
+                    )
         return vehicle
 
     def fetch_connection_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
