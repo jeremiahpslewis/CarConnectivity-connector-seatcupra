@@ -1363,7 +1363,20 @@ class Connector(BaseConnector):
                             vehicle.charging.estimated_date_reached._set_value(value=estimated_date_reached)  # pylint: disable=protected-access
                     else:
                         vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'charging', charging_data, {'state'})
+                    log_extra_keys(
+                        LOG_API,
+                        'charging',
+                        charging_data,
+                        {
+                            'state',
+                            'chargedPowerInKw',
+                            'rateInKmph',
+                            'remainingTimeInMinutes',
+                            'type',
+                            'mode',
+                            'settings',
+                        }
+                    )
                 if 'plug' in data and data['plug'] is not None:
                     if 'connection' in data['plug'] and data['plug']['connection'] is not None:
                         if data['plug']['connection'] in [item.value for item in ChargingConnector.ChargingConnectorConnectionState]:
