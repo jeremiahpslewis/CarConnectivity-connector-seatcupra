@@ -1153,6 +1153,8 @@ class Connector(BaseConnector):
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings'
         data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
         if data is not None:
+            if isinstance(vehicle, SeatCupraVehicle):
+                vehicle._ensure_base_commands()
             if not isinstance(vehicle.climatization, SeatCupraClimatization):
                 vehicle.climatization = SeatCupraClimatization(vehicle=vehicle, origin=vehicle.climatization)
             if vehicle.climatization.commands is not None and not vehicle.climatization.commands.contains_command('start-stop'):
@@ -1162,6 +1164,8 @@ class Connector(BaseConnector):
                 climatisation_start_stop_command._add_on_set_hook(self.__on_air_conditioning_start_stop)  # pylint: disable=protected-access
                 climatisation_start_stop_command.enabled = True
                 vehicle.climatization.commands.add_command(climatisation_start_stop_command)
+            if vehicle.climatization.commands is not None and not vehicle.climatization.commands.enabled:
+                vehicle.climatization.commands.enabled = True
             if 'carCapturedTimestamp' not in data or data['carCapturedTimestamp'] is None:
                 raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
             captured_at: datetime = robust_time_parse(data['carCapturedTimestamp'])

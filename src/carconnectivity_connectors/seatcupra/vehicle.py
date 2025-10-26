@@ -64,11 +64,18 @@ class SeatCupraVehicle(GenericVehicle):  # pylint: disable=too-many-instance-att
         if self.climatization is not None:
             if getattr(self.climatization, 'commands', None) is None:
                 self.climatization.commands = Commands(parent=self.climatization)
-            if (self.climatization.commands is not None
-                    and not self.climatization.commands.contains_command('start-stop')):
-                command = ClimatizationStartStopCommand(parent=self.climatization.commands)
-                command.enabled = True
-                self.climatization.commands.add_command(command)
+            commands = self.climatization.commands
+            if commands is not None:
+                if not commands.contains_command('start-stop'):
+                    command = ClimatizationStartStopCommand(parent=commands)
+                    command.enabled = True
+                    commands.add_command(command)
+                else:
+                    command = commands.commands.get('start-stop')
+                    if command is not None and not command.enabled:
+                        command.enabled = True
+                if not commands.enabled:
+                    commands.enabled = True
 
 
 class SeatCupraElectricVehicle(ElectricVehicle, SeatCupraVehicle):
