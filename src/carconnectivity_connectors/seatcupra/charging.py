@@ -8,6 +8,7 @@ from enum import Enum
 
 from carconnectivity.charging import Charging
 from carconnectivity.vehicle import ElectricVehicle
+from carconnectivity.attributes import EnumAttribute, BooleanAttribute, LevelAttribute
 
 if TYPE_CHECKING:
     from typing import Optional, Dict
@@ -23,12 +24,30 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
     charging states specific to SeatCupra vehicles.
     """
     def __init__(self, vehicle: ElectricVehicle | None = None, origin: Optional[Charging] = None) -> None:
+        origin_mode_value = None
+        origin_preferred_mode_value = None
         if origin is not None:
             super().__init__(vehicle=vehicle, origin=origin)
             self.settings = SeatCupraCharging.Settings(parent=self, origin=origin.settings)
+            if hasattr(origin, 'mode'):
+                origin_mode_attribute = getattr(origin, 'mode')
+                origin_mode_value = getattr(origin_mode_attribute, 'value', None)
+            if hasattr(origin, 'preferred_mode'):
+                origin_preferred_mode_attribute = getattr(origin, 'preferred_mode')
+                origin_preferred_mode_value = getattr(origin_preferred_mode_attribute, 'value', None)
         else:
             super().__init__(vehicle=vehicle)
             self.settings = SeatCupraCharging.Settings(parent=self, origin=self.settings)
+
+        self.mode: EnumAttribute = EnumAttribute(name="mode", parent=self, value_type=SeatCupraCharging.SeatCupraChargeMode,
+                                                 tags={'connector_custom'})
+        if origin_mode_value is not None:
+            self.mode._set_value(origin_mode_value)  # pylint: disable=protected-access
+
+        self.preferred_mode: EnumAttribute = EnumAttribute(name="preferred_mode", parent=self, value_type=SeatCupraCharging.SeatCupraChargeMode,
+                                                           tags={'connector_custom'})
+        if origin_preferred_mode_value is not None:
+            self.preferred_mode._set_value(origin_preferred_mode_value)  # pylint: disable=protected-access
 
     class Settings(Charging.Settings):
         """
@@ -40,6 +59,11 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
             else:
                 super().__init__(parent=parent)
             self.max_current_in_ampere: Optional[bool] = None
+            self.battery_care_enabled: BooleanAttribute = BooleanAttribute(name="battery_care_enabled", parent=self, tags={'connector_custom'})
+            self.battery_care_target_level: LevelAttribute = LevelAttribute(name="battery_care_target_level", parent=self, tags={'connector_custom'})
+            self.battery_care_target_level.minimum = 0.0
+            self.battery_care_target_level.maximum = 100.0
+            self.battery_care_target_level.precision = 5.0
 
     class SeatCupraChargingState(Enum,):
         """

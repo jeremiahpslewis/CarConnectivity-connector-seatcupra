@@ -16,7 +16,7 @@ from carconnectivity.garage import Garage
 from carconnectivity.errors import AuthenticationError, TooManyRequestsError, RetrievalError, APIError, APICompatibilityError, \
     TemporaryAuthenticationError, SetterError, CommandError
 from carconnectivity.util import robust_time_parse, log_extra_keys, config_remove_credentials
-from carconnectivity.units import Length, Current
+from carconnectivity.units import Length, Current, Power, Speed
 from carconnectivity.doors import Doors
 from carconnectivity.windows import Windows
 from carconnectivity.lights import Lights
@@ -712,17 +712,76 @@ class Connector(BaseConnector):
                     if 'targetPct' in charging_status and charging_status['targetPct'] is not None:
                         if isinstance(vehicle, ElectricVehicle):
                             vehicle.charging.settings.target_level._set_value(charging_status['targetPct'])  # pylint: disable=protected-access
-                    if 'chargeMode' in charging_status and charging_status['chargeMode'] is not None:
-                        if charging_status['chargeMode'] in [item.value for item in Charging.ChargingType]:
-                            if isinstance(vehicle, ElectricVehicle):
-                                vehicle.charging.type._set_value(value=Charging.ChargingType(charging_status['chargeMode']))  # pylint: disable=protected-access
-                        else:
-                            LOG_API.info('Unknown charge type %s', charging_status['chargeMode'])
-                            if isinstance(vehicle, ElectricVehicle):
+                    charge_mode_present: bool = 'chargeMode' in charging_status
+                    charge_mode_value = charging_status.get('chargeMode')
+                    charging_type_values = {item.value for item in Charging.ChargingType}
+                    seat_charge_mode_values = {item.value for item in SeatCupraCharging.SeatCupraChargeMode}
+                    if isinstance(vehicle, ElectricVehicle):
+                        if charge_mode_present:
+                            if charge_mode_value in charging_type_values:
+                                vehicle.charging.type._set_value(value=Charging.ChargingType(charge_mode_value))  # pylint: disable=protected-access
+                            elif charge_mode_value is None:
+                                vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                            elif charge_mode_value in seat_charge_mode_values:
+                                vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                            else:
                                 vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
-                    else:
-                        if isinstance(vehicle, ElectricVehicle):
+                        else:
                             vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                        if hasattr(vehicle.charging, 'mode'):
+                            if charge_mode_present:
+                                if charge_mode_value is None:
+                                    vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                                else:
+                                    try:
+                                        seat_mode = SeatCupraCharging.SeatCupraChargeMode(charge_mode_value)
+                                    except ValueError:
+                                        if charge_mode_value not in charging_type_values:
+                                            vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                        else:
+                                            vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                                    else:
+                                        vehicle.charging.mode._set_value(seat_mode)  # pylint: disable=protected-access
+                            else:
+                                vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                        if hasattr(vehicle.charging, 'preferred_mode'):
+                            if 'preferredChargeMode' in charging_status:
+                                preferred_mode_value = charging_status['preferredChargeMode']
+                                if preferred_mode_value is None:
+                                    vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
+                                else:
+                                    try:
+                                        preferred_mode = SeatCupraCharging.SeatCupraChargeMode(preferred_mode_value)
+                                    except ValueError:
+                                        vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                    else:
+                                        vehicle.charging.preferred_mode._set_value(preferred_mode)  # pylint: disable=protected-access
+                            else:
+                                vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
+                        if 'active' in charging_status and charging_status['active'] is not None:
+                            vehicle.charging.enabled = bool(charging_status['active'])
+                        elif 'active' in charging_status:
+                            vehicle.charging.enabled = None
+                        if 'chargedPowerInKw' in charging_status and charging_status['chargedPowerInKw'] is not None:
+                            try:
+                                charged_power = float(charging_status['chargedPowerInKw'])
+                            except (TypeError, ValueError):
+                                LOG_API.info('Could not parse charged power value %s', charging_status['chargedPowerInKw'])
+                                vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
+                            else:
+                                vehicle.charging.power._set_value(value=charged_power, unit=Power.KW)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
+                        if 'rateInKmph' in charging_status and charging_status['rateInKmph'] is not None:
+                            try:
+                                charging_rate = float(charging_status['rateInKmph'])
+                            except (TypeError, ValueError):
+                                LOG_API.info('Could not parse charge rate value %s', charging_status['rateInKmph'])
+                                vehicle.charging.rate._set_value(None)  # pylint: disable=protected-access
+                            else:
+                                vehicle.charging.rate._set_value(value=charging_rate, unit=Speed.KMH)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.rate._set_value(None)  # pylint: disable=protected-access
                     if 'remainingTime' in charging_status and charging_status['remainingTime'] is not None:
                         remaining_duration: timedelta = timedelta(minutes=charging_status['remainingTime'])
                         estimated_date_reached: datetime = datetime.now(tz=timezone.utc) + remaining_duration
@@ -1099,18 +1158,83 @@ class Connector(BaseConnector):
 
             if data is not None:
                 if 'charging' in data and data['charging'] is not None:
-                    if 'state' in data['charging'] and data['charging']['state'] is not None:
-                        if data['charging']['state'] in [item.value for item in SeatCupraCharging.SeatCupraChargingState]:
-                            volkswagen_charging_state = SeatCupraCharging.SeatCupraChargingState(data['charging']['state'])
+                    charging_data: Dict = data['charging']
+                    if 'state' in charging_data and charging_data['state'] is not None:
+                        if charging_data['state'] in [item.value for item in SeatCupraCharging.SeatCupraChargingState]:
+                            volkswagen_charging_state = SeatCupraCharging.SeatCupraChargingState(charging_data['state'])
                             charging_state: Charging.ChargingState = mapping_seatcupra_charging_state[volkswagen_charging_state]
                         else:
-                            LOG_API.info('Unkown charging state %s not in %s', data['charging']['state'],
+                            LOG_API.info('Unkown charging state %s not in %s', charging_data['state'],
                                          str(SeatCupraCharging.SeatCupraChargingState))
                             charging_state = Charging.ChargingState.UNKNOWN
                         vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
                     else:
                         vehicle.charging.state._set_value(None)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'charging',  data['charging'], {'state'})
+                    if 'type' in charging_data:
+                        if charging_data['type'] is not None:
+                            if charging_data['type'] in [item.value for item in Charging.ChargingType]:
+                                vehicle.charging.type._set_value(value=Charging.ChargingType(charging_data['type']))  # pylint: disable=protected-access
+                            else:
+                                LOG_API.info('Unknown charge type %s', charging_data['type'])
+                                vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                    if hasattr(vehicle.charging, 'mode') and 'mode' in charging_data:
+                        if charging_data['mode'] is not None:
+                            try:
+                                charge_mode = SeatCupraCharging.SeatCupraChargeMode(charging_data['mode'])
+                            except ValueError:
+                                LOG_API.info('Unknown charge mode %s', charging_data['mode'])
+                                vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                            else:
+                                vehicle.charging.mode._set_value(charge_mode)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                    if hasattr(vehicle.charging, 'preferred_mode'):
+                        if 'preferredChargeMode' in charging_data and charging_data['preferredChargeMode'] is not None:
+                            try:
+                                preferred_mode = SeatCupraCharging.SeatCupraChargeMode(charging_data['preferredChargeMode'])
+                            except ValueError:
+                                LOG_API.info('Unknown preferred charge mode %s', charging_data['preferredChargeMode'])
+                                vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                            else:
+                                vehicle.charging.preferred_mode._set_value(preferred_mode)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
+                    if 'chargedPowerInKw' in charging_data and charging_data['chargedPowerInKw'] is not None:
+                        try:
+                            charged_power = float(charging_data['chargedPowerInKw'])
+                        except (TypeError, ValueError):
+                            LOG_API.info('Could not parse charged power value %s', charging_data['chargedPowerInKw'])
+                            vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.power._set_value(value=charged_power, unit=Power.KW)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.power._set_value(None)  # pylint: disable=protected-access
+                    if 'rateInKmph' in charging_data and charging_data['rateInKmph'] is not None:
+                        try:
+                            charging_rate = float(charging_data['rateInKmph'])
+                        except (TypeError, ValueError):
+                            LOG_API.info('Could not parse charge rate value %s', charging_data['rateInKmph'])
+                            vehicle.charging.rate._set_value(None)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.rate._set_value(value=charging_rate, unit=Speed.KMH)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.rate._set_value(None)  # pylint: disable=protected-access
+                    if 'remainingTimeInMinutes' in charging_data and charging_data['remainingTimeInMinutes'] is not None:
+                        try:
+                            remaining_minutes = float(charging_data['remainingTimeInMinutes'])
+                        except (TypeError, ValueError):
+                            LOG_API.info('Could not parse remaining charging time %s', charging_data['remainingTimeInMinutes'])
+                            vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
+                        else:
+                            remaining_duration: timedelta = timedelta(minutes=remaining_minutes)
+                            estimated_date_reached: datetime = datetime.now(tz=timezone.utc) + remaining_duration
+                            estimated_date_reached = estimated_date_reached.replace(second=0, microsecond=0)
+                            vehicle.charging.estimated_date_reached._set_value(value=estimated_date_reached)  # pylint: disable=protected-access
+                    else:
+                        vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
+                    log_extra_keys(LOG_API, 'charging', charging_data, {'state'})
                 if 'plug' in data and data['plug'] is not None:
                     if 'connection' in data['plug'] and data['plug']['connection'] is not None:
                         if data['plug']['connection'] in [item.value for item in ChargingConnector.ChargingConnectorConnectionState]:
@@ -1207,6 +1331,17 @@ class Connector(BaseConnector):
                             vehicle.charging.settings.auto_unlock._set_value(None, measured=captured_at)  # pylint: disable=protected-access
                     else:
                         vehicle.charging.settings.auto_unlock._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                    if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
+                        if 'batteryCareModeEnabled' in data['settings'] and data['settings']['batteryCareModeEnabled'] is not None:
+                            vehicle.charging.settings.battery_care_enabled._set_value(
+                                bool(data['settings']['batteryCareModeEnabled']), measured=captured_at)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.settings.battery_care_enabled._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                        if 'batteryCareTargetSocPercentage' in data['settings'] and data['settings']['batteryCareTargetSocPercentage'] is not None:
+                            vehicle.charging.settings.battery_care_target_level._set_value(
+                                data['settings']['batteryCareTargetSocPercentage'], measured=captured_at)  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.settings.battery_care_target_level._set_value(None, measured=captured_at)  # pylint: disable=protected-access
                     if 'targetSoc_pct' in data['settings'] and data['settings']['targetSoc_pct'] is not None:
                         charging_capability: Optional[Capability] = vehicle.capabilities.get_capability('charging')
                         if charging_capability is not None and ('supportsTargetStateOfCharge' not in charging_capability.parameters
@@ -1227,6 +1362,9 @@ class Connector(BaseConnector):
                 vehicle.charging.settings.maximum_current._set_value(None)  # pylint: disable=protected-access
                 vehicle.charging.settings.auto_unlock._set_value(None)  # pylint: disable=protected-access
                 vehicle.charging.settings.target_level._set_value(None)  # pylint: disable=protected-access
+                if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
+                    vehicle.charging.settings.battery_care_enabled._set_value(None)  # pylint: disable=protected-access
+                    vehicle.charging.settings.battery_care_target_level._set_value(None)  # pylint: disable=protected-access
         return vehicle
 
     def fetch_image(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
