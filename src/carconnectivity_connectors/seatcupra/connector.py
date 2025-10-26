@@ -1485,8 +1485,20 @@ class Connector(BaseConnector):
                                                                           measured=captured_at)
                     else:
                         vehicle.charging.settings.target_level._set_value(None, measured=captured_at)  # pylint: disable=protected-access
-                    log_extra_keys(LOG_API, 'chargingSettings', data['settings'], {'carCapturedTimestamp', 'maxChargeCurrentAC_A', 'maxChargeCurrentAC',
-                                                                                   'autoUnlockPlugWhenCharged', 'targetSoc_pct'})
+                    log_extra_keys(
+                        LOG_API,
+                        'chargingSettings',
+                        data['settings'],
+                        {
+                            'carCapturedTimestamp',
+                            'maxChargeCurrentAC_A',
+                            'maxChargeCurrentAC',
+                            'autoUnlockPlugWhenCharged',
+                            'targetSoc_pct',
+                            'batteryCareModeEnabled',
+                            'batteryCareTargetSocPercentage'
+                        }
+                    )
             else:
                 vehicle.charging.settings.maximum_current._set_value(None)  # pylint: disable=protected-access
                 vehicle.charging.settings.auto_unlock._set_value(None)  # pylint: disable=protected-access
