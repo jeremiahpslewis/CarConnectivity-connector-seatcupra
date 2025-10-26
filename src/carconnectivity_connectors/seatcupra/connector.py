@@ -1260,8 +1260,20 @@ class Connector(BaseConnector):
                     vehicle.climatization.settings.unit_in_car._set_value(data['unitInCar'], measured=captured_at)  # pylint: disable=protected-access
                 else:
                     vehicle.climatization.settings.unit_in_car._set_value(None)  # pylint: disable=protected-access
-            log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings', data,
-                           {'carCapturedTimestamp', 'targetTemperatureInCelsius', 'targetTemperatureInFahrenheit', 'climatisationWithoutExternalPower'})
+            log_extra_keys(
+                LOG_API,
+                f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/climatisation/settings',
+                data,
+                {
+                    'carCapturedTimestamp',
+                    'targetTemperatureInCelsius',
+                    'targetTemperatureInFahrenheit',
+                    'climatisationWithoutExternalPower',
+                    'climatisationAtUnlock',
+                    'windowHeatingEnabled',
+                    'unitInCar',
+                }
+            )
         return vehicle
 
     def fetch_charging(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
