@@ -1155,6 +1155,13 @@ class Connector(BaseConnector):
         if data is not None:
             if not isinstance(vehicle.climatization, SeatCupraClimatization):
                 vehicle.climatization = SeatCupraClimatization(vehicle=vehicle, origin=vehicle.climatization)
+            if vehicle.climatization.commands is not None and not vehicle.climatization.commands.contains_command('start-stop'):
+                # Ensure start/stop command exists whenever climatization settings are available so plugins relying on it do not break
+                climatisation_start_stop_command: ClimatizationStartStopCommand = \
+                    ClimatizationStartStopCommand(parent=vehicle.climatization.commands)
+                climatisation_start_stop_command._add_on_set_hook(self.__on_air_conditioning_start_stop)  # pylint: disable=protected-access
+                climatisation_start_stop_command.enabled = True
+                vehicle.climatization.commands.add_command(climatisation_start_stop_command)
             if 'carCapturedTimestamp' not in data or data['carCapturedTimestamp'] is None:
                 raise APIError('Could not fetch vehicle status, carCapturedTimestamp missing')
             captured_at: datetime = robust_time_parse(data['carCapturedTimestamp'])
