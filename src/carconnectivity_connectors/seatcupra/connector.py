@@ -433,7 +433,7 @@ class Connector(BaseConnector):
                                                 capability.parameters[parameter] = value
                                     else:
                                         raise APIError('Could not fetch capabilities, capability ID missing')
-                                    log_extra_keys(LOG_API, 'capability', capability_dict,  {'id', 'expirationDate', 'editable', 'parameters', 'status'})
+                                    log_extra_keys(LOG_API, 'capability', capability_dict,  {'id', 'expirationDate', 'editable', 'parameters', 'status', 'active', 'user-enabled'})
 
                                 for capability_id in vehicle.capabilities.capabilities.keys() - found_capabilities:
                                     vehicle.capabilities.remove_capability(capability_id)
