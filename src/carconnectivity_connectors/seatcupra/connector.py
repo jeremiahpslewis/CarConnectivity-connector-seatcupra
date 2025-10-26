@@ -486,7 +486,6 @@ class Connector(BaseConnector):
                                         vehicle.doors.commands.add_command(lock_unlock_command)
                                 else:
                                     vehicle.capabilities.clear_capabilities()
-                                self._ensure_vehicle_commands(vehicle)
                         if isinstance(vehicle, SeatCupraVehicle):
                             vehicle = self.fetch_image(vehicle)
                     else:
