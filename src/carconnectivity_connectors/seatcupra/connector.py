@@ -854,6 +854,7 @@ class Connector(BaseConnector):
                             'active',
                             'preferredChargeMode',
                             'chargeSettings',
+                            'batteryCardStatus',
                         }
                     )
                 else:
