@@ -28,6 +28,12 @@ class SeatCupraClimatization(Climatization):  # pylint: disable=too-many-instanc
         else:
             super().__init__(vehicle=vehicle)
             self.settings: Climatization.Settings = SeatCupraClimatization.Settings(parent=self, origin=self.settings)
+        # Ensure explicit default UNKNOWN state to avoid empty payloads downstream
+        try:
+            if getattr(self, 'state', None) is not None and getattr(self.state, 'value', None) is None:
+                self.state._set_value(Climatization.ClimatizationState.UNKNOWN)  # pylint: disable=protected-access
+        except Exception:
+            pass
 
     class Settings(Climatization.Settings):
         """

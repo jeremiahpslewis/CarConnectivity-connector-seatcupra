@@ -9,6 +9,7 @@ import logging
 
 from carconnectivity.charging import Charging
 from carconnectivity.vehicle import ElectricVehicle
+from carconnectivity.charging_connector import ChargingConnector
 from carconnectivity.attributes import EnumAttribute, BooleanAttribute, LevelAttribute
 
 if TYPE_CHECKING:
@@ -51,6 +52,28 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
                                                            tags={'connector_custom'})
         if origin_preferred_mode_value is not None:
             self.preferred_mode._set_value(origin_preferred_mode_value)  # pylint: disable=protected-access
+
+        # Ensure defaults are explicit UNKNOWN values so downstream (e.g., MQTT) never publishes empty strings
+        try:
+            if getattr(self, 'state', None) is not None and getattr(self.state, 'value', None) is None:
+                self.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
+            if getattr(self, 'type', None) is not None and getattr(self.type, 'value', None) is None:
+                self.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+            if getattr(self, 'mode', None) is not None and getattr(self.mode, 'value', None) is None:
+                self.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+            if getattr(self, 'preferred_mode', None) is not None and getattr(self.preferred_mode, 'value', None) is None:
+                self.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+            if getattr(self, 'connector', None) is not None:
+                connector = self.connector
+                if getattr(connector, 'connection_state', None) is not None and getattr(connector.connection_state, 'value', None) is None:
+                    connector.connection_state._set_value(ChargingConnector.ChargingConnectorConnectionState.UNKNOWN)  # pylint: disable=protected-access
+                if getattr(connector, 'external_power', None) is not None and getattr(connector.external_power, 'value', None) is None:
+                    connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
+                if getattr(connector, 'lock_state', None) is not None and getattr(connector.lock_state, 'value', None) is None:
+                    connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
+        except Exception:
+            # Be conservative if base class structure changes
+            pass
 
     class Settings(Charging.Settings):
         """

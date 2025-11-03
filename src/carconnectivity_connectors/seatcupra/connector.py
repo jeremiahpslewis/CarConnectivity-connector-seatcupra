@@ -225,6 +225,19 @@ class Connector(BaseConnector):
         self.session.refresh()
 
         self._elapsed: List[timedelta] = []
+        # Track one-shot payload debug logs per VIN/category to avoid log spam
+        self._payload_debug_tokens: set[str] = set()
+
+    def _debug_log_payload_once(self, vin: str, category: str, payload: Any) -> None:
+        """Log the full API payload once per VIN+category to aid debugging when defaults are applied."""
+        token = f"{vin}:{category}"
+        if token in self._payload_debug_tokens:
+            return
+        try:
+            LOG_API.info('VIN %s [%s] full payload: %s', vin, category, json.dumps(payload))
+        except Exception:  # pragma: no cover - safeguard for non-JSON-serializable payloads
+            LOG_API.info('VIN %s [%s] full payload (repr): %r', vin, category, payload)
+        self._payload_debug_tokens.add(token)
 
     def startup(self) -> None:
         self._background_thread = threading.Thread(target=self._background_loop, daemon=False)
@@ -273,7 +286,7 @@ class Connector(BaseConnector):
                 self.connection_state._set_value(value=ConnectionState.ERROR)  # pylint: disable=protected-access
                 self._stop_event.wait(interval)
             except Exception as err:
-                LOG.critical('Critical error during update: %s', traceback.format_exc())
+                LOG.exception('Critical error during update')
                 self.connection_state._set_value(value=ConnectionState.ERROR)  # pylint: disable=protected-access
                 self.healthy._set_value(value=False)  # pylint: disable=protected-access
                 raise err
@@ -821,6 +834,10 @@ class Connector(BaseConnector):
                             vehicle.charging.settings.target_level._set_value(charging_status['targetPct'])  # pylint: disable=protected-access
                     charge_mode_present: bool = 'chargeMode' in charging_status
                     charge_mode_value = charging_status.get('chargeMode')
+                    if not charge_mode_present:
+                        LOG_API.info('VIN %s: services.charging.chargeMode key missing (will default to UNKNOWN/mode None)', vin)
+                    elif charge_mode_value is None:
+                        LOG_API.info('VIN %s: services.charging.chargeMode is None (will default to UNKNOWN/mode None)', vin)
                     charging_type_values = {item.value for item in Charging.ChargingType}
                     seat_charge_mode_values = {item.value for item in SeatCupraCharging.SeatCupraChargeMode}
                     if isinstance(vehicle, ElectricVehicle):
@@ -833,42 +850,51 @@ class Connector(BaseConnector):
                                 vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                             else:
                                 vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                                LOG_API.info('VIN %s: services.charging.chargeMode %r is not a known ChargingType or SeatCupraChargeMode', vin, charge_mode_value)
                         else:
                             vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         if hasattr(vehicle.charging, 'mode'):
                             if charge_mode_present:
                                 if charge_mode_value is None:
                                     vehicle.charging.mode._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                                    LOG_API.info('VIN %s: services.charging.chargeMode is None -> charging.mode None/UNKNOWN', vin)
                                 else:
                                     try:
                                         seat_mode = SeatCupraCharging.SeatCupraChargeMode(charge_mode_value)
                                     except ValueError:
                                         if charge_mode_value not in charging_type_values:
                                             vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                            LOG_API.info('VIN %s: services.charging.chargeMode %r not recognized -> charging.mode UNKNOWN', vin, charge_mode_value)
                                         else:
                                             vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                                            LOG_API.info('VIN %s: services.charging.chargeMode %r is a ChargingType -> charging.mode None', vin, charge_mode_value)
                                     else:
                                         vehicle.charging.mode._set_value(seat_mode)  # pylint: disable=protected-access
                             else:
                                 vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                                LOG_API.info('VIN %s: services.charging.chargeMode missing -> charging.mode None', vin)
                         if hasattr(vehicle.charging, 'preferred_mode'):
                             if 'preferredChargeMode' in charging_status:
                                 preferred_mode_value = charging_status['preferredChargeMode']
                                 if preferred_mode_value is None:
                                     vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
+                                    LOG_API.info('VIN %s: services.charging.preferredChargeMode is None -> charging.preferred_mode None', vin)
                                 else:
                                     try:
                                         preferred_mode = SeatCupraCharging.SeatCupraChargeMode(preferred_mode_value)
                                     except ValueError:
                                         vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                        LOG_API.info('VIN %s: services.charging.preferredChargeMode %r not recognized -> preferred_mode UNKNOWN', vin, preferred_mode_value)
                                     else:
                                         vehicle.charging.preferred_mode._set_value(preferred_mode)  # pylint: disable=protected-access
                             else:
                                 vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
+                                LOG_API.info('VIN %s: services.charging.preferredChargeMode missing -> charging.preferred_mode None', vin)
                         if 'active' in charging_status and charging_status['active'] is not None:
                             vehicle.charging.enabled = bool(charging_status['active'])
                         elif 'active' in charging_status:
                             vehicle.charging.enabled = None
+                            LOG_API.info('VIN %s: services.charging.active present but None -> charging.enabled None', vin)
                         if 'chargedPowerInKw' in charging_status and charging_status['chargedPowerInKw'] is not None:
                             try:
                                 charged_power = float(charging_status['chargedPowerInKw'])
@@ -924,6 +950,7 @@ class Connector(BaseConnector):
                             vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                         if hasattr(vehicle.charging, 'preferred_mode'):
                             vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                        LOG_API.info('VIN %s: services.charging missing -> setting charging.* to UNKNOWN defaults', vin)
                 if 'climatisation' in vehicle_status_data['services'] and vehicle_status_data['services']['climatisation'] is not None:
                     climatisation_status: Dict = vehicle_status_data['services']['climatisation']
 
@@ -1183,6 +1210,8 @@ class Connector(BaseConnector):
                         climatization_state = Climatization.ClimatizationState.UNKNOWN
                     vehicle.climatization.state._set_value(value=climatization_state, measured=captured_at)  # pylint: disable=protected-access
                 else:
+                    LOG_API.info('VIN %s: climatisationStatus.climatisationState missing/None -> climatization.state UNKNOWN', vin)
+                    self._debug_log_payload_once(vin, 'climatisation.status', data)
                     vehicle.climatization.state._set_value(Climatization.ClimatizationState.UNKNOWN, measured=captured_at)  # pylint: disable=protected-access
                 if 'remainingClimatisationTimeInMinutes' in climatisation_status and climatisation_status['remainingClimatisationTimeInMinutes'] is not None:
                     try:
@@ -1400,15 +1429,20 @@ class Connector(BaseConnector):
                             charging_state = Charging.ChargingState.UNKNOWN
                         vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
                     else:
+                        LOG_API.info('VIN %s: charging.status.state missing or None -> charging.state UNKNOWN', vin)
+                        self._debug_log_payload_once(vin, 'charging.status', data)
                         vehicle.charging.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
                     if 'type' in charging_data:
                         if charging_data['type'] is not None:
                             if charging_data['type'] in [item.value for item in Charging.ChargingType]:
                                 vehicle.charging.type._set_value(value=Charging.ChargingType(charging_data['type']))  # pylint: disable=protected-access
-                            else:
-                                LOG_API.info('Unknown charge type %s', charging_data['type'])
-                                vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         else:
+                            LOG_API.info('Unknown charge type %s', charging_data['type'])
+                            self._debug_log_payload_once(vin, 'charging.status', data)
+                            vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                        else:
+                            LOG_API.info('VIN %s: charging.status.type is None -> charging.type UNKNOWN', vin)
+                            self._debug_log_payload_once(vin, 'charging.status', data)
                             vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                     if hasattr(vehicle.charging, 'mode') and 'mode' in charging_data:
                         if charging_data['mode'] is not None:
@@ -1420,6 +1454,8 @@ class Connector(BaseConnector):
                             else:
                                 vehicle.charging.mode._set_value(charge_mode)  # pylint: disable=protected-access
                         else:
+                            LOG_API.info('VIN %s: charging.status.mode is None -> charging.mode None', vin)
+                            self._debug_log_payload_once(vin, 'charging.status', data)
                             vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
                     if hasattr(vehicle.charging, 'preferred_mode'):
                         if 'preferredChargeMode' in charging_data and charging_data['preferredChargeMode'] is not None:
@@ -1431,6 +1467,8 @@ class Connector(BaseConnector):
                             else:
                                 vehicle.charging.preferred_mode._set_value(preferred_mode)  # pylint: disable=protected-access
                         else:
+                            LOG_API.info('VIN %s: charging.status.preferredChargeMode missing/None -> preferred_mode None', vin)
+                            self._debug_log_payload_once(vin, 'charging.status', data)
                             vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
                     if 'chargedPowerInKw' in charging_data and charging_data['chargedPowerInKw'] is not None:
                         try:
@@ -1489,6 +1527,8 @@ class Connector(BaseConnector):
                             plug_state = ChargingConnector.ChargingConnectorConnectionState.UNKNOWN
                         vehicle.charging.connector.connection_state._set_value(value=plug_state)  # pylint: disable=protected-access
                     else:
+                        LOG_API.info('VIN %s: charging.status.plug.connection missing/None -> connector.connection_state UNKNOWN', vin)
+                        self._debug_log_payload_once(vin, 'charging.status', data)
                         vehicle.charging.connector.connection_state._set_value(
                             value=ChargingConnector.ChargingConnectorConnectionState.UNKNOWN)  # pylint: disable=protected-access
                     if 'externalPower' in data['plug'] and data['plug']['externalPower'] is not None:
@@ -1503,6 +1543,8 @@ class Connector(BaseConnector):
                                 plug_power_state = ChargingConnector.ExternalPower.UNKNOWN
                         vehicle.charging.connector.external_power._set_value(value=plug_power_state)  # pylint: disable=protected-access
                     else:
+                        LOG_API.info('VIN %s: charging.status.plug.externalPower missing/None -> connector.external_power UNKNOWN', vin)
+                        self._debug_log_payload_once(vin, 'charging.status', data)
                         vehicle.charging.connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
                     if 'lock' in data['plug'] and data['plug']['lock'] is not None:
                         if data['plug']['lock'] in [item.value for item in ChargingConnector.ChargingConnectorLockState]:
@@ -1513,6 +1555,8 @@ class Connector(BaseConnector):
                             plug_lock_state = ChargingConnector.ChargingConnectorLockState.UNKNOWN
                         vehicle.charging.connector.lock_state._set_value(value=plug_lock_state)  # pylint: disable=protected-access
                     else:
+                        LOG_API.info('VIN %s: charging.status.plug.lock missing/None -> connector.lock_state UNKNOWN', vin)
+                        self._debug_log_payload_once(vin, 'charging.status', data)
                         vehicle.charging.connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
                     log_extra_keys(LOG_API, 'plug', data['plug'], {'connection', 'externalPower', 'lock'})
                 else:
@@ -1528,6 +1572,8 @@ class Connector(BaseConnector):
                 vehicle.charging.connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
                 vehicle.charging.connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
                 vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
+                LOG_API.info('VIN %s: charging.status missing -> setting charging.* to UNKNOWN defaults', vin)
+                self._debug_log_payload_once(vin, 'charging.status', data)
 
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/settings'
             data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
@@ -1723,14 +1769,19 @@ class Connector(BaseConnector):
                                         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")  # pyright: ignore[reportPossiblyUnboundVariable]
                                         self.session.cache[image_url] = (img_str, str(datetime.utcnow()))
                         except requests.exceptions.ConnectionError as connection_error:
+                            LOG.exception('Image download failed (url=%s)', image_url)
                             raise RetrievalError(f'Connection error: {connection_error}') from connection_error
                         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+                            LOG.exception('Image download failed (chunked encoding) (url=%s)', image_url)
                             raise RetrievalError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
                         except requests.exceptions.ReadTimeout as timeout_error:
+                            LOG.exception('Image download timed out (url=%s)', image_url)
                             raise RetrievalError(f'Timeout during read: {timeout_error}') from timeout_error
                         except requests.exceptions.RetryError as retry_error:
+                            LOG.exception('Image download failed after retries (url=%s)', image_url)
                             raise RetrievalError(f'Retrying failed: {retry_error}') from retry_error
                         except UnidentifiedImageError as unidentified_image_error:
+                            LOG.exception('Unidentified image error while processing (url=%s)', image_url)
                             raise RetrievalError(f'Unidentified image error: {unidentified_image_error}') from unidentified_image_error
                     if img is not None:
                         vehicle._car_images[image_id] = img  # pylint: disable=protected-access
@@ -1786,18 +1837,23 @@ class Connector(BaseConnector):
                 elif not allow_http_error or (allowed_errors is not None and status_response.status_code not in allowed_errors):
                     raise RetrievalError(f'Could not fetch data for {url}. Status Code was: {status_response.status_code}')
             except requests.exceptions.ConnectionError as connection_error:
+                LOG.exception('GET %s failed with connection error', url)
                 raise RetrievalError(f'Connection error: {connection_error}.'
                                      ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
             except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+                LOG.exception('GET %s failed with chunked encoding error', url)
                 raise RetrievalError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
             except requests.exceptions.ReadTimeout as timeout_error:
+                LOG.exception('GET %s timed out', url)
                 raise RetrievalError(f'Timeout during read: {timeout_error}') from timeout_error
             except requests.exceptions.RetryError as retry_error:
+                LOG.exception('GET %s failed after retries', url)
                 raise RetrievalError(f'Retrying failed: {retry_error}') from retry_error
             except requests.exceptions.JSONDecodeError as json_error:
                 if allow_empty:
                     data = None
                 else:
+                    LOG.exception('GET %s returned invalid JSON', url)
                     raise RetrievalError(f'JSON decode error: {json_error}') from json_error
         return data
 
@@ -1828,13 +1884,17 @@ class Connector(BaseConnector):
                 LOG.error('Could not start/stop charging (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not start/stop charging ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
+            LOG.exception('Charging start/stop request failed for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Connection error: {connection_error}.'
                                ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            LOG.exception('Charging start/stop request failed (chunked encoding) for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
+            LOG.exception('Charging start/stop request timed out for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
+            LOG.exception('Charging start/stop request failed after retries for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         return command_arguments
 
@@ -1890,13 +1950,17 @@ class Connector(BaseConnector):
                 LOG.error('Could not start/stop air conditioning (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not start/stop air conditioning ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
+            LOG.exception('Climatization start/stop request failed for VIN %s (url=%s, payload=%s)', vin, url, command_dict)
             raise CommandError(f'Connection error: {connection_error}.'
                                ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            LOG.exception('Climatization start/stop request failed (chunked encoding) for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
+            LOG.exception('Climatization start/stop request timed out for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
+            LOG.exception('Climatization start/stop request failed after retries for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         return command_arguments
 
@@ -1909,7 +1973,11 @@ class Connector(BaseConnector):
         """
         command_dict = {'spin': spin}
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/users/{self.session.user_id}/spin/verify'
-        spin_verify_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        try:
+            spin_verify_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+        except requests.exceptions.RequestException:
+            LOG.exception('Fetching security token failed (url=%s, payload=%s)', url, command_dict)
+            raise
         if spin_verify_response.status_code != requests.codes['created']:
             raise AuthenticationError(f'Could not fetch security token ({spin_verify_response.status_code}: {spin_verify_response.text})')
         data = spin_verify_response.json()
@@ -2020,19 +2088,23 @@ class Connector(BaseConnector):
             command_dict['userPosition']['longitude'] = vehicle.position.longitude.value
 
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/honk-and-flash'
-            try:
-                command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
-                if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
-                    LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
-                    raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
+        try:
+            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+            if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
+                LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
+                raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
             except requests.exceptions.ConnectionError as connection_error:
+                LOG.exception('Honk/Flash request failed for VIN %s (url=%s, payload=%s)', vin, url, command_dict)
                 raise CommandError(f'Connection error: {connection_error}.'
                                    ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
             except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+                LOG.exception('Honk/Flash request failed (chunked encoding) for VIN %s (url=%s)', vin, url)
                 raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
             except requests.exceptions.ReadTimeout as timeout_error:
+                LOG.exception('Honk/Flash request timed out for VIN %s (url=%s)', vin, url)
                 raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
             except requests.exceptions.RetryError as retry_error:
+                LOG.exception('Honk/Flash request failed after retries for VIN %s (url=%s)', vin, url)
                 raise CommandError(f'Retrying failed: {retry_error}') from retry_error
             else:
                 raise CommandError(f'Unknown command {command_arguments["command"]}')
@@ -2073,15 +2145,20 @@ class Connector(BaseConnector):
                 LOG.error('Could not execute locking command (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not execute locking command ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
+            LOG.exception('Lock/Unlock request failed for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Connection error: {connection_error}.'
                                ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            LOG.exception('Lock/Unlock request failed (chunked encoding) for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
+            LOG.exception('Lock/Unlock request timed out for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
+            LOG.exception('Lock/Unlock request failed after retries for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         except AuthenticationError as auth_error:
+            LOG.exception('Lock/Unlock authentication error for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Authentication error: {auth_error}') from auth_error
         return command_arguments
 
@@ -2129,13 +2206,17 @@ class Connector(BaseConnector):
                 LOG.error('Could not set climatization settings (%s) %s', settings_response.status_code, settings_response.text)
                 raise SetterError(f'Could not set value ({settings_response.status_code}): {settings_response.text}')
         except requests.exceptions.ConnectionError as connection_error:
+            LOG.exception('Climatization settings change failed for VIN %s (url=%s, payload=%s)', vin, url, setting_dict)
             raise SetterError(f'Connection error: {connection_error}.'
                               ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            LOG.exception('Climatization settings change failed (chunked encoding) for VIN %s (url=%s)', vin, url)
             raise SetterError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
+            LOG.exception('Climatization settings change timed out for VIN %s (url=%s)', vin, url)
             raise SetterError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
+            LOG.exception('Climatization settings change failed after retries for VIN %s (url=%s)', vin, url)
             raise SetterError(f'Retrying failed: {retry_error}') from retry_error
         return value
 
@@ -2166,13 +2247,17 @@ class Connector(BaseConnector):
                 LOG.error('Could not start/stop window heating (%s: %s)', command_response.status_code, command_response.text)
                 raise CommandError(f'Could not start/stop window heating ({command_response.status_code}: {command_response.text})')
         except requests.exceptions.ConnectionError as connection_error:
+            LOG.exception('Window heating start/stop request failed for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Connection error: {connection_error}.'
                                ' If this happens frequently, please check if other applications communicate with the Seat/Cupra server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            LOG.exception('Window heating start/stop request failed (chunked encoding) for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
+            LOG.exception('Window heating start/stop request timed out for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
+            LOG.exception('Window heating start/stop request failed after retries for VIN %s (url=%s)', vin, url)
             raise CommandError(f'Retrying failed: {retry_error}') from retry_error
         return command_arguments
 
@@ -2280,13 +2365,17 @@ class Connector(BaseConnector):
                 LOG.error('Could not set charging settings (%s)', settings_response.status_code)
                 raise SetterError(f'Could not set value ({settings_response.status_code})')
         except requests.exceptions.ConnectionError as connection_error:
+            LOG.exception('Charging settings change failed for VIN %s (url=%s, payload=%s)', vin, url, setting_dict)
             raise SetterError(f'Connection error: {connection_error}.'
                               ' If this happens frequently, please check if other applications communicate with the Volkswagen server.') from connection_error
         except requests.exceptions.ChunkedEncodingError as chunked_encoding_error:
+            LOG.exception('Charging settings change failed (chunked encoding) for VIN %s (url=%s)', vin, url)
             raise SetterError(f'Error: {chunked_encoding_error}') from chunked_encoding_error
         except requests.exceptions.ReadTimeout as timeout_error:
+            LOG.exception('Charging settings change timed out for VIN %s (url=%s)', vin, url)
             raise SetterError(f'Timeout during read: {timeout_error}') from timeout_error
         except requests.exceptions.RetryError as retry_error:
+            LOG.exception('Charging settings change failed after retries for VIN %s (url=%s)', vin, url)
             raise SetterError(f'Retrying failed: {retry_error}') from retry_error
         return value
 
