@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from enum import Enum
+import logging
 
 from carconnectivity.charging import Charging
 from carconnectivity.vehicle import ElectricVehicle
@@ -14,6 +15,8 @@ if TYPE_CHECKING:
     from typing import Optional, Dict
 
     from carconnectivity.objects import GenericObject
+
+LOG_API: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra-api-debug")
 
 
 class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attributes
@@ -81,6 +84,12 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
         DISCHARGING = 'discharging'
         UNKNOWN = 'unknown charging state'
 
+        @classmethod
+        def _missing_(cls, value):  # type: ignore[override]
+            # Log and allow normal ValueError by returning None
+            LOG_API.info('Unknown %s value: %r', cls.__name__, value)
+            return None
+
     class SeatCupraChargeMode(Enum,):
         """
         Enum class representing different SeatCupra charge modes.
@@ -95,6 +104,12 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
         HOME_STORAGE_CHARGING = 'homeStorageCharging'
         IMMEDIATE_DISCHARGING = 'immediateDischarging'
         UNKNOWN = 'unknown charge mode'
+
+        @classmethod
+        def _missing_(cls, value):  # type: ignore[override]
+            # Log and allow normal ValueError by returning None
+            LOG_API.info('Unknown %s value: %r', cls.__name__, value)
+            return None
 
 
 # Mapping of Cupra charging states to generic charging states
