@@ -51,7 +51,7 @@ class SeatCupraCharging(Charging):  # pylint: disable=too-many-instance-attribut
 
     class Settings(Charging.Settings):
         """
-        This class represents the settings for car volkswagen car charging.
+        This class represents the settings for Cupra car charging.
         """
         def __init__(self, parent: Optional[GenericObject] = None, origin: Optional[Charging.Settings] = None) -> None:
             if origin is not None:
