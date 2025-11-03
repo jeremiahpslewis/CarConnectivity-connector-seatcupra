@@ -2212,15 +2212,19 @@ class Connector(BaseConnector):
                 battery_care_enabled_value = bool(value)
             elif settings.battery_care_enabled.enabled and settings.battery_care_enabled.value is not None:
                 battery_care_enabled_value = bool(settings.battery_care_enabled.value)
-            if battery_care_enabled_value is not None:
-                setting_dict['batteryCareModeEnabled'] = battery_care_enabled_value
 
             battery_care_raw: Optional[float] = None
             if isinstance(attribute, LevelAttribute) and attribute.id == 'battery_care_target_level':
                 if value is not None:
                     battery_care_raw = float(value)
+                    if battery_care_enabled_value is None:
+                        battery_care_enabled_value = True
+                else:
+                    battery_care_raw = None
             elif settings.battery_care_target_level.enabled and settings.battery_care_target_level.value is not None:
                 battery_care_raw = float(settings.battery_care_target_level.value)
+            if battery_care_enabled_value is not None:
+                setting_dict['batteryCareModeEnabled'] = battery_care_enabled_value
             if battery_care_raw is not None:
                 precision_bc: float = settings.battery_care_target_level.precision if settings.battery_care_target_level.precision is not None else 5.0
                 battery_care_target = round(battery_care_raw / precision_bc) * precision_bc
@@ -2229,9 +2233,6 @@ class Connector(BaseConnector):
                 if settings.battery_care_target_level.maximum is not None:
                     battery_care_target = min(settings.battery_care_target_level.maximum, battery_care_target)
                 setting_dict['batteryCareTargetSocPercentage'] = int(battery_care_target)
-                if battery_care_enabled_value is None:
-                    battery_care_enabled_value = True
-                    setting_dict['batteryCareModeEnabled'] = True
 
         charging_capability: Optional[Capability] = vehicle.capabilities.get_capability('charging')
         supports_target_soc: bool = True
