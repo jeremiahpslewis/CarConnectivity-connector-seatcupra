@@ -1592,21 +1592,29 @@ class Connector(BaseConnector):
                     supports_target_soc = True
                     if charging_capability is not None and charging_capability.parameters.get('supportsTargetStateOfCharge') == 'false':
                         supports_target_soc = False
+                    target_attr: LevelAttribute = vehicle.charging.settings.target_level
+                    target_attr._add_on_set_hook(self.__on_charging_settings_change)  # pylint: disable=protected-access
+                    if supports_target_soc:
+                        target_attr.minimum = 50.0
+                        target_attr.maximum = 100.0
+                        target_attr.precision = 10.0
+                    elif isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
+                        fallback_level = vehicle.charging.settings.battery_care_target_level
+                        target_attr.minimum = fallback_level.minimum
+                        target_attr.maximum = fallback_level.maximum
+                        target_attr.precision = fallback_level.precision
+                    else:
+                        target_attr.minimum = 0.0
+                        target_attr.maximum = 100.0
+                        target_attr.precision = 5.0
+                    target_attr._is_changeable = True  # pylint: disable=protected-access
+
                     if 'targetSoc_pct' in data['settings']:
                         target_soc = data['settings']['targetSoc_pct']
-                        if supports_target_soc:
-                            vehicle.charging.settings.target_level.minimum = 50.0
-                            vehicle.charging.settings.target_level.maximum = 100.0
-                            vehicle.charging.settings.target_level.precision = 10.0
-                            # pylint: disable-next=protected-access
-                            vehicle.charging.settings.target_level._add_on_set_hook(self.__on_charging_settings_change)
-                            vehicle.charging.settings.target_level._is_changeable = True  # pylint: disable=protected-access
-                        else:
-                            vehicle.charging.settings.target_level._is_changeable = False  # pylint: disable=protected-access
                         if target_soc is not None:
-                            vehicle.charging.settings.target_level._set_value(target_soc, measured=captured_at)  # pylint: disable=protected-access
+                            target_attr._set_value(target_soc, measured=captured_at)  # pylint: disable=protected-access
                         else:
-                            vehicle.charging.settings.target_level._set_value(None, measured=captured_at)  # pylint: disable=protected-access
+                            target_attr._set_value(None, measured=captured_at)  # pylint: disable=protected-access
                     else:
                         fallback_target: Optional[float] = None
                         if isinstance(vehicle.charging.settings, SeatCupraCharging.Settings):
@@ -1614,13 +1622,11 @@ class Connector(BaseConnector):
                             battery_care_target = vehicle.charging.settings.battery_care_target_level.value
                             if battery_care_enabled and battery_care_target is not None:
                                 fallback_target = float(battery_care_target)
-                        if fallback_target is None and vehicle.charging.settings.target_level.value is None:
+                        if fallback_target is None and target_attr.value is None:
                             # With no explicit target from the API, charging defaults to 100%
                             fallback_target = 100.0
                         if fallback_target is not None:
-                            vehicle.charging.settings.target_level._set_value(fallback_target, measured=captured_at)  # pylint: disable=protected-access
-                        if not supports_target_soc:
-                            vehicle.charging.settings.target_level._is_changeable = False  # No explicit API control available
+                            target_attr._set_value(fallback_target, measured=captured_at)  # pylint: disable=protected-access
                     log_extra_keys(
                         LOG_API,
                         'chargingSettings',
@@ -2223,6 +2229,9 @@ class Connector(BaseConnector):
                 if settings.battery_care_target_level.maximum is not None:
                     battery_care_target = min(settings.battery_care_target_level.maximum, battery_care_target)
                 setting_dict['batteryCareTargetSocPercentage'] = int(battery_care_target)
+                if battery_care_enabled_value is None:
+                    battery_care_enabled_value = True
+                    setting_dict['batteryCareModeEnabled'] = True
 
         charging_capability: Optional[Capability] = vehicle.capabilities.get_capability('charging')
         supports_target_soc: bool = True

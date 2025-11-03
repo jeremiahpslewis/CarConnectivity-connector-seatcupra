@@ -91,6 +91,9 @@ class Capabilities(GenericObject):
             if capability_id in self.__capabilities and self.__capabilities[capability_id].enabled:
                 capability: Capability = self.__capabilities[capability_id]
                 if capability.status.enabled and capability.status.value is not None and len(capability.status.value) > 0:
+                    filtered_status = [status for status in capability.status.value if status is not None]
+                    if all(status == Capability.Status.UNKNOWN for status in filtered_status):
+                        return True
                     return False
                 return True
             return False
