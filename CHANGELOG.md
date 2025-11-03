@@ -3,7 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes so far
+### Fixed
+- Fixed MQTT sensor errors by replacing None with UNKNOWN enum values for connection_state and position_type attributes. This prevents empty strings from being published to MQTT topics when data is unavailable from the API
 
 ## [0.4.7] - 2025-11-02
 ### Changed
