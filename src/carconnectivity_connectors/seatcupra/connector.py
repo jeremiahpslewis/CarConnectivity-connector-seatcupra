@@ -239,6 +239,51 @@ class Connector(BaseConnector):
             LOG_API.info('VIN %s [%s] full payload (repr): %r', vin, category, payload)
         self._payload_debug_tokens.add(token)
 
+    def _log_state_snapshot(self, vehicle: SeatCupraVehicle, source: str) -> None:
+        """Emit a one-line summary of key enum values to correlate with MQTT payloads."""
+        vin = vehicle.vin.value if vehicle.vin is not None else None
+        if vin is None:
+            return
+        parts: list[str] = []
+        if isinstance(vehicle, ElectricVehicle) and getattr(vehicle, 'charging', None) is not None:
+            charging = vehicle.charging
+            parts.append(f"charging.state={getattr(getattr(charging, 'state', None), 'value', None)}")
+            parts.append(f"charging.type={getattr(getattr(charging, 'type', None), 'value', None)}")
+            if hasattr(charging, 'mode'):
+                parts.append(f"charging.mode={getattr(getattr(charging, 'mode', None), 'value', None)}")
+            if hasattr(charging, 'preferred_mode'):
+                parts.append(f"charging.pref_mode={getattr(getattr(charging, 'preferred_mode', None), 'value', None)}")
+            if getattr(charging, 'connector', None) is not None:
+                connector = charging.connector
+                parts.append(f"connector.conn_state={getattr(getattr(connector, 'connection_state', None), 'value', None)}")
+                parts.append(f"connector.external_power={getattr(getattr(connector, 'external_power', None), 'value', None)}")
+        if getattr(vehicle, 'climatization', None) is not None:
+            parts.append(f"climatization.state={getattr(getattr(vehicle.climatization, 'state', None), 'value', None)}")
+        LOG_API.info('VIN %s snapshot (%s): %s', vin, source, ', '.join(parts))
+
+    def _ensure_default_states(self, vehicle: SeatCupraVehicle) -> None:
+        """Ensure key enums have explicit values (never None)."""
+        if isinstance(vehicle, ElectricVehicle) and getattr(vehicle, 'charging', None) is not None:
+            charging = vehicle.charging
+            if getattr(getattr(charging, 'state', None), 'value', None) is None:
+                charging.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
+            if getattr(getattr(charging, 'type', None), 'value', None) is None:
+                charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+            if hasattr(charging, 'mode') and getattr(charging.mode, 'value', None) is None:
+                charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+            if hasattr(charging, 'preferred_mode') and getattr(charging.preferred_mode, 'value', None) is None:
+                charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+            if getattr(charging, 'connector', None) is not None:
+                connector = charging.connector
+                if getattr(getattr(connector, 'connection_state', None), 'value', None) is None:
+                    connector.connection_state._set_value(ChargingConnector.ChargingConnectorConnectionState.UNKNOWN)  # pylint: disable=protected-access
+                if getattr(getattr(connector, 'external_power', None), 'value', None) is None:
+                    connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
+                if getattr(getattr(connector, 'lock_state', None), 'value', None) is None:
+                    connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
+        if getattr(vehicle, 'climatization', None) is not None and getattr(vehicle.climatization.state, 'value', None) is None:
+            vehicle.climatization.state._set_value(Climatization.ClimatizationState.UNKNOWN)  # pylint: disable=protected-access
+
     def startup(self) -> None:
         self._background_thread = threading.Thread(target=self._background_loop, daemon=False)
         self._background_thread.name = 'carconnectivity.connectors.seatcupra-background'
@@ -734,6 +779,8 @@ class Connector(BaseConnector):
                 vehicle_status_data,
                 {'updatedAt', 'locked', 'lights', 'hood', 'trunk', 'doors', 'windows', 'sunRoof', 'engine'}
             )
+        self._ensure_default_states(vehicle)
+        self._log_state_snapshot(vehicle, 'services')
         return vehicle
 
     def fetch_vehicle_mycar_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
@@ -985,6 +1032,8 @@ class Connector(BaseConnector):
                             'progressBarPct'
                         }
                     )
+        self._ensure_default_states(vehicle)
+        self._log_state_snapshot(vehicle, 'climatisation')
         return vehicle
 
     def fetch_connection_status(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
@@ -1022,6 +1071,8 @@ class Connector(BaseConnector):
             else:
                 vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, 'connection status', data,  {'connection'})
+        self._ensure_default_states(vehicle)
+        self._log_state_snapshot(vehicle, 'charging.status')
         return vehicle
 
     def fetch_parking_position(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
