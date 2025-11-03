@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+import re
+
 import threading
 
 import json
@@ -62,6 +64,63 @@ if TYPE_CHECKING:
 
 LOG: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra")
 LOG_API: logging.Logger = logging.getLogger("carconnectivity.connectors.seatcupra-api-debug")
+
+
+def _normalize_status_name(name: str) -> str:
+    normalized = name.replace('-', '_').replace(' ', '_')
+    normalized = re.sub(r'(?<!^)(?=[A-Z])', '_', normalized)
+    normalized = re.sub(r'__+', '_', normalized)
+    return normalized.upper()
+
+
+def _parse_capability_status(raw_status) -> Capability.Status | None:
+    if isinstance(raw_status, Capability.Status):
+        return raw_status
+    if isinstance(raw_status, int):
+        try:
+            return Capability.Status(raw_status)
+        except ValueError:
+            LOG_API.warning('Capability status unknown %s', raw_status)
+            return Capability.Status.UNKNOWN
+    if isinstance(raw_status, str):
+        stripped = raw_status.strip()
+        if stripped == '':
+            return None
+        try:
+            return Capability.Status(int(stripped))
+        except ValueError:
+            normalized_name = _normalize_status_name(stripped)
+            if normalized_name in Capability.Status.__members__:
+                return Capability.Status[normalized_name]
+            LOG_API.warning('Capability status unknown %s', stripped)
+            return Capability.Status.UNKNOWN
+    if isinstance(raw_status, dict):
+        for key in ('status', 'code', 'value', 'id', 'name', 'reason'):
+            if key in raw_status and raw_status[key] is not None:
+                status = _parse_capability_status(raw_status[key])
+                if status is not None:
+                    return status
+        LOG_API.warning('Capability status unsupported structure %s', raw_status)
+        return Capability.Status.UNKNOWN
+    LOG_API.warning('Capability status unsupported type %s', raw_status)
+    return Capability.Status.UNKNOWN
+
+
+def _normalize_capability_statuses(raw_statuses) -> list[Capability.Status]:
+    if raw_statuses is None:
+        return []
+    if isinstance(raw_statuses, (list, tuple, set)):
+        iterable = raw_statuses
+    else:
+        iterable = [raw_statuses]
+    normalized: list[Capability.Status] = []
+    for item in iterable:
+        status = _parse_capability_status(item)
+        if status is None:
+            continue
+        if status not in normalized:
+            normalized.append(status)
+    return normalized
 
 
 # pylint: disable=too-many-lines
@@ -421,18 +480,16 @@ class Connector(BaseConnector):
                                             capability = Capability(capability_id=capability_id, capabilities=vehicle.capabilities)
                                             vehicle.capabilities.add_capability(capability_id, capability)
                                         if 'status' in capability_dict and capability_dict['status'] is not None:
-                                            statuses = capability_dict['status']
-                                            if isinstance(statuses, list):
-                                                for status in statuses:
-                                                    if status in [item.value for item in Capability.Status]:
-                                                        capability.status.value.append(Capability.Status(status))
-                                                    else:
-                                                        LOG_API.warning('Capability status unkown %s', status)
-                                                        capability.status.value.append(Capability.Status.UNKNOWN)
-                                            else:
-                                                LOG_API.warning('Capability status not a list in %s', statuses)
+                                            normalized_statuses = _normalize_capability_statuses(capability_dict['status'])
+                                            if capability.status.value is None:
+                                                capability.status._set_value([])  # pylint: disable=protected-access
+                                            status_list = capability.status.value
+                                            if status_list is not None:
+                                                status_list.clear()
+                                                status_list.extend(normalized_statuses)
                                         else:
-                                            capability.status.value.clear()                                  
+                                            if capability.status.value is not None:
+                                                capability.status.value.clear()
                                         if 'expirationDate' in capability_dict and capability_dict['expirationDate'] is not None \
                                                 and capability_dict['expirationDate'] != '':
                                             expiration_date: datetime = robust_time_parse(capability_dict['expirationDate'])
