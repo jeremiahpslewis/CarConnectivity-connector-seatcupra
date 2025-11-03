@@ -892,8 +892,6 @@ class Connector(BaseConnector):
                                 LOG_API.info('VIN %s: services.charging.preferredChargeMode missing -> charging.preferred_mode None', vin)
                         if 'active' in charging_status and charging_status['active'] is not None:
                             vehicle.charging.enabled = bool(charging_status['active'])
-                        elif 'active' in charging_status:
-                            vehicle.charging.enabled = None
                             LOG_API.info('VIN %s: services.charging.active present but None -> charging.enabled None', vin)
                         if 'chargedPowerInKw' in charging_status and charging_status['chargedPowerInKw'] is not None:
                             try:
@@ -943,14 +941,14 @@ class Connector(BaseConnector):
                     )
                 else:
                     if isinstance(vehicle, ElectricVehicle):
-                        vehicle.charging.enabled = False
+                        # Keep charging enabled and publish explicit UNKNOWNs (avoid blanks in downstream MQTT)
                         vehicle.charging.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
                         vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         if hasattr(vehicle.charging, 'mode'):
                             vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                         if hasattr(vehicle.charging, 'preferred_mode'):
                             vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
-                        LOG_API.info('VIN %s: services.charging missing -> setting charging.* to UNKNOWN defaults', vin)
+                        LOG_API.info('VIN %s: services.charging missing -> setting charging.* to UNKNOWN defaults (kept enabled)', vin)
                 if 'climatisation' in vehicle_status_data['services'] and vehicle_status_data['services']['climatisation'] is not None:
                     climatisation_status: Dict = vehicle_status_data['services']['climatisation']
 
@@ -969,8 +967,6 @@ class Connector(BaseConnector):
                     if hasattr(vehicle.climatization, 'enabled'):
                         if 'active' in climatisation_status and climatisation_status['active'] is not None:
                             vehicle.climatization.enabled = bool(climatisation_status['active'])
-                        elif 'active' in climatisation_status:
-                            vehicle.climatization.enabled = None
                     # we take status, targetTemperatureCelsius, targetTemperatureFahrenheit, from climatization request
                     log_extra_keys(
                         LOG_API,
