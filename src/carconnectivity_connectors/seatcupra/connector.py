@@ -770,13 +770,13 @@ class Connector(BaseConnector):
                             if charge_mode_value in charging_type_values:
                                 vehicle.charging.type._set_value(value=Charging.ChargingType(charge_mode_value))  # pylint: disable=protected-access
                             elif charge_mode_value is None:
-                                vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                                vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                             elif charge_mode_value in seat_charge_mode_values:
-                                vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                                vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                             else:
                                 vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         else:
-                            vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                            vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         if hasattr(vehicle.charging, 'mode'):
                             if charge_mode_present:
                                 if charge_mode_value is None:
@@ -1345,7 +1345,7 @@ class Connector(BaseConnector):
                                 LOG_API.info('Unknown charge type %s', charging_data['type'])
                                 vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         else:
-                            vehicle.charging.type._set_value(None)  # pylint: disable=protected-access
+                            vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                     if hasattr(vehicle.charging, 'mode') and 'mode' in charging_data:
                         if charging_data['mode'] is not None:
                             try:
