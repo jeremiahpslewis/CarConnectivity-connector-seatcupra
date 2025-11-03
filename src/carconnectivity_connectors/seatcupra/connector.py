@@ -597,10 +597,10 @@ class Connector(BaseConnector):
                     LOG_API.info('Unknown connection state %s', vehicle_connection_data['connection']['mode'])
                 log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data['connection'], {'mode'})
             else:
-                vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+                vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, f'/api/v2/vehicles/{vin}/connection', vehicle_connection_data, {'connection'})
         else:
-            vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+            vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
 
         url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v2/vehicles/{vin}/status'
         vehicle_status_data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
@@ -991,10 +991,10 @@ class Connector(BaseConnector):
                         vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
                         LOG_API.info('Unknown connection state %s', data['connection']['mode'])
                 else:
-                    vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+                    vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
                 log_extra_keys(LOG_API, 'connection status', data['connection'],  {'mode'})
             else:
-                vehicle.connection_state._set_value(None)  # pylint: disable=protected-access
+                vehicle.connection_state._set_value(GenericVehicle.ConnectionState.UNKNOWN)  # pylint: disable=protected-access
             log_extra_keys(LOG_API, 'connection status', data,  {'connection'})
         return vehicle
 
@@ -1037,7 +1037,7 @@ class Connector(BaseConnector):
         else:
             vehicle.position.latitude._set_value(None)  # pylint: disable=protected-access
             vehicle.position.longitude._set_value(None)  # pylint: disable=protected-access
-            vehicle.position.position_type._set_value(None)  # pylint: disable=protected-access
+            vehicle.position.position_type._set_value(Position.PositionType.UNKNOWN)  # pylint: disable=protected-access
         return vehicle
 
     def fetch_mileage(self, vehicle: SeatCupraVehicle, no_cache: bool = False) -> SeatCupraVehicle:
