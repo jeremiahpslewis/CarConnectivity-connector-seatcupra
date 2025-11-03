@@ -1436,10 +1436,10 @@ class Connector(BaseConnector):
                         if charging_data['type'] is not None:
                             if charging_data['type'] in [item.value for item in Charging.ChargingType]:
                                 vehicle.charging.type._set_value(value=Charging.ChargingType(charging_data['type']))  # pylint: disable=protected-access
-                        else:
-                            LOG_API.info('Unknown charge type %s', charging_data['type'])
-                            self._debug_log_payload_once(vin, 'charging.status', data)
-                            vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                            else:
+                                LOG_API.info('Unknown charge type %s', charging_data['type'])
+                                self._debug_log_payload_once(vin, 'charging.status', data)
+                                vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                         else:
                             LOG_API.info('VIN %s: charging.status.type is None -> charging.type UNKNOWN', vin)
                             self._debug_log_payload_once(vin, 'charging.status', data)
@@ -2088,11 +2088,11 @@ class Connector(BaseConnector):
             command_dict['userPosition']['longitude'] = vehicle.position.longitude.value
 
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/honk-and-flash'
-        try:
-            command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
-            if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
-                LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
-                raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
+            try:
+                command_response: requests.Response = self.session.post(url, data=json.dumps(command_dict), allow_redirects=True)
+                if command_response.status_code not in (requests.codes['ok'], requests.codes['no_content'], requests.codes['created']):
+                    LOG.error('Could not execute honk or flash command (%s: %s)', command_response.status_code, command_response.text)
+                    raise CommandError(f'Could not execute honk or flash command ({command_response.status_code}: {command_response.text})')
             except requests.exceptions.ConnectionError as connection_error:
                 LOG.exception('Honk/Flash request failed for VIN %s (url=%s, payload=%s)', vin, url, command_dict)
                 raise CommandError(f'Connection error: {connection_error}.'
@@ -2106,8 +2106,8 @@ class Connector(BaseConnector):
             except requests.exceptions.RetryError as retry_error:
                 LOG.exception('Honk/Flash request failed after retries for VIN %s (url=%s)', vin, url)
                 raise CommandError(f'Retrying failed: {retry_error}') from retry_error
-            else:
-                raise CommandError(f'Unknown command {command_arguments["command"]}')
+        else:
+            raise CommandError(f'Unknown command {command_arguments["command"]}')
         return command_arguments
 
     def __on_lock_unlock(self, lock_unlock_command: LockUnlockCommand, command_arguments: Union[str, Dict[str, Any]]) \
