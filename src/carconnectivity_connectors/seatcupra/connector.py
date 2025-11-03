@@ -918,6 +918,12 @@ class Connector(BaseConnector):
                 else:
                     if isinstance(vehicle, ElectricVehicle):
                         vehicle.charging.enabled = False
+                        vehicle.charging.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
+                        vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                        if hasattr(vehicle.charging, 'mode'):
+                            vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                        if hasattr(vehicle.charging, 'preferred_mode'):
+                            vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                 if 'climatisation' in vehicle_status_data['services'] and vehicle_status_data['services']['climatisation'] is not None:
                     climatisation_status: Dict = vehicle_status_data['services']['climatisation']
 
@@ -1509,8 +1515,19 @@ class Connector(BaseConnector):
                     else:
                         vehicle.charging.connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
                     log_extra_keys(LOG_API, 'plug', data['plug'], {'connection', 'externalPower', 'lock'})
+                else:
+                    vehicle.charging.connector.connection_state._set_value(ChargingConnector.ChargingConnectorConnectionState.UNKNOWN)  # pylint: disable=protected-access
+                    vehicle.charging.connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
+                    vehicle.charging.connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
                 log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status', data,
                                {'state', 'battery', 'charging', 'plug'})
+            else:
+                vehicle.charging.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
+                vehicle.charging.type._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
+                vehicle.charging.connector.connection_state._set_value(ChargingConnector.ChargingConnectorConnectionState.UNKNOWN)  # pylint: disable=protected-access
+                vehicle.charging.connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
+                vehicle.charging.connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
+                vehicle.charging.estimated_date_reached._set_value(None)  # pylint: disable=protected-access
 
             url = f'https://ola.prod.code.seat.cloud.vwgroup.com/vehicles/{vin}/charging/settings'
             data: Dict[str, Any] | None = self._fetch_data(url=url, session=self.session, no_cache=no_cache)
