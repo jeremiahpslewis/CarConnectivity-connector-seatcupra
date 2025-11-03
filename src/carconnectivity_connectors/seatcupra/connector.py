@@ -1594,14 +1594,16 @@ class Connector(BaseConnector):
                         supports_target_soc = False
                     if 'targetSoc_pct' in data['settings']:
                         target_soc = data['settings']['targetSoc_pct']
+                        if supports_target_soc:
+                            vehicle.charging.settings.target_level.minimum = 50.0
+                            vehicle.charging.settings.target_level.maximum = 100.0
+                            vehicle.charging.settings.target_level.precision = 10.0
+                            # pylint: disable-next=protected-access
+                            vehicle.charging.settings.target_level._add_on_set_hook(self.__on_charging_settings_change)
+                            vehicle.charging.settings.target_level._is_changeable = True  # pylint: disable=protected-access
+                        else:
+                            vehicle.charging.settings.target_level._is_changeable = False  # pylint: disable=protected-access
                         if target_soc is not None:
-                            if supports_target_soc:
-                                vehicle.charging.settings.target_level.minimum = 50.0
-                                vehicle.charging.settings.target_level.maximum = 100.0
-                                vehicle.charging.settings.target_level.precision = 10.0
-                                # pylint: disable-next=protected-access
-                                vehicle.charging.settings.target_level._add_on_set_hook(self.__on_charging_settings_change)
-                                vehicle.charging.settings.target_level._is_changeable = True  # pylint: disable=protected-access
                             vehicle.charging.settings.target_level._set_value(target_soc, measured=captured_at)  # pylint: disable=protected-access
                         else:
                             vehicle.charging.settings.target_level._set_value(None, measured=captured_at)  # pylint: disable=protected-access
@@ -2199,7 +2201,6 @@ class Connector(BaseConnector):
             setting_dict['autoUnlockPlugWhenChargedAc'] = 'on' if auto_unlock_value else 'off'
 
         battery_care_enabled_value: Optional[bool] = None
-        battery_care_target_value: Optional[float] = None
         if isinstance(settings, SeatCupraCharging.Settings):
             if isinstance(attribute, BooleanAttribute) and attribute.id == 'battery_care_enabled':
                 battery_care_enabled_value = bool(value)
@@ -2216,12 +2217,12 @@ class Connector(BaseConnector):
                 battery_care_raw = float(settings.battery_care_target_level.value)
             if battery_care_raw is not None:
                 precision_bc: float = settings.battery_care_target_level.precision if settings.battery_care_target_level.precision is not None else 5.0
-                battery_care_target_value = round(battery_care_raw / precision_bc) * precision_bc
+                battery_care_target = round(battery_care_raw / precision_bc) * precision_bc
                 if settings.battery_care_target_level.minimum is not None:
-                    battery_care_target_value = max(settings.battery_care_target_level.minimum, battery_care_target_value)
+                    battery_care_target = max(settings.battery_care_target_level.minimum, battery_care_target)
                 if settings.battery_care_target_level.maximum is not None:
-                    battery_care_target_value = min(settings.battery_care_target_level.maximum, battery_care_target_value)
-                setting_dict['batteryCareTargetSocPercentage'] = int(battery_care_target_value)
+                    battery_care_target = min(settings.battery_care_target_level.maximum, battery_care_target)
+                setting_dict['batteryCareTargetSocPercentage'] = int(battery_care_target)
 
         charging_capability: Optional[Capability] = vehicle.capabilities.get_capability('charging')
         supports_target_soc: bool = True
