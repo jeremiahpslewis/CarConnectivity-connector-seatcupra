@@ -838,7 +838,7 @@ class Connector(BaseConnector):
                         if hasattr(vehicle.charging, 'mode'):
                             if charge_mode_present:
                                 if charge_mode_value is None:
-                                    vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                                    vehicle.charging.mode._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
                                 else:
                                     try:
                                         seat_mode = SeatCupraCharging.SeatCupraChargeMode(charge_mode_value)
