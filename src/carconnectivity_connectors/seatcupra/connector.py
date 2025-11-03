@@ -890,9 +890,12 @@ class Connector(BaseConnector):
                             else:
                                 vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
                                 LOG_API.info('VIN %s: services.charging.preferredChargeMode missing -> charging.preferred_mode None', vin)
-                        if 'active' in charging_status and charging_status['active'] is not None:
-                            vehicle.charging.enabled = bool(charging_status['active'])
-                            LOG_API.info('VIN %s: services.charging.active present but None -> charging.enabled None', vin)
+                        if 'active' in charging_status:
+                            if charging_status['active'] is not None:
+                                vehicle.charging.enabled = bool(charging_status['active'])
+                            else:
+                                # Do not force None; keep previous enabled state to avoid blank downstream payloads
+                                LOG_API.info('VIN %s: services.charging.active present but None -> charging.enabled unchanged', vin)
                         if 'chargedPowerInKw' in charging_status and charging_status['chargedPowerInKw'] is not None:
                             try:
                                 charged_power = float(charging_status['chargedPowerInKw'])
@@ -1228,11 +1231,13 @@ class Connector(BaseConnector):
                         vehicle.climatization.trigger._set_value(climatisation_status['climatisationTrigger'], measured=captured_at)  # pylint: disable=protected-access
                     else:
                         vehicle.climatization.trigger._set_value(None, measured=captured_at)  # pylint: disable=protected-access
-                if hasattr(vehicle.climatization, 'enabled'):
-                    if 'active' in climatisation_status and climatisation_status['active'] is not None:
-                        vehicle.climatization.enabled = bool(climatisation_status['active'])
-                    elif 'active' in climatisation_status:
-                        vehicle.climatization.enabled = None
+                    if hasattr(vehicle.climatization, 'enabled'):
+                        if 'active' in climatisation_status:
+                            if climatisation_status['active'] is not None:
+                                vehicle.climatization.enabled = bool(climatisation_status['active'])
+                            else:
+                                # Keep previous enabled state to avoid blank downstream payloads
+                                LOG_API.info('VIN %s: services.climatisation.active present but None -> climatization.enabled unchanged', vin)
                 log_extra_keys(
                     LOG_API,
                     'climatisationStatus',
