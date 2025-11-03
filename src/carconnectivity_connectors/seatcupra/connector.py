@@ -856,8 +856,8 @@ class Connector(BaseConnector):
                         if hasattr(vehicle.charging, 'mode'):
                             if charge_mode_present:
                                 if charge_mode_value is None:
-                                    vehicle.charging.mode._set_value(Charging.ChargingType.UNKNOWN)  # pylint: disable=protected-access
-                                    LOG_API.info('VIN %s: services.charging.chargeMode is None -> charging.mode None/UNKNOWN', vin)
+                                    vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                    LOG_API.info('VIN %s: services.charging.chargeMode is None -> charging.mode UNKNOWN', vin)
                                 else:
                                     try:
                                         seat_mode = SeatCupraCharging.SeatCupraChargeMode(charge_mode_value)
@@ -866,19 +866,19 @@ class Connector(BaseConnector):
                                             vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                                             LOG_API.info('VIN %s: services.charging.chargeMode %r not recognized -> charging.mode UNKNOWN', vin, charge_mode_value)
                                         else:
-                                            vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
-                                            LOG_API.info('VIN %s: services.charging.chargeMode %r is a ChargingType -> charging.mode None', vin, charge_mode_value)
+                                            vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                            LOG_API.info('VIN %s: services.charging.chargeMode %r is a ChargingType -> charging.mode UNKNOWN', vin, charge_mode_value)
                                     else:
                                         vehicle.charging.mode._set_value(seat_mode)  # pylint: disable=protected-access
                             else:
-                                vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
-                                LOG_API.info('VIN %s: services.charging.chargeMode missing -> charging.mode None', vin)
+                                vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                LOG_API.info('VIN %s: services.charging.chargeMode missing -> charging.mode UNKNOWN', vin)
                         if hasattr(vehicle.charging, 'preferred_mode'):
                             if 'preferredChargeMode' in charging_status:
                                 preferred_mode_value = charging_status['preferredChargeMode']
                                 if preferred_mode_value is None:
-                                    vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
-                                    LOG_API.info('VIN %s: services.charging.preferredChargeMode is None -> charging.preferred_mode None', vin)
+                                    vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                    LOG_API.info('VIN %s: services.charging.preferredChargeMode is None -> charging.preferred_mode UNKNOWN', vin)
                                 else:
                                     try:
                                         preferred_mode = SeatCupraCharging.SeatCupraChargeMode(preferred_mode_value)
@@ -888,8 +888,8 @@ class Connector(BaseConnector):
                                     else:
                                         vehicle.charging.preferred_mode._set_value(preferred_mode)  # pylint: disable=protected-access
                             else:
-                                vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
-                                LOG_API.info('VIN %s: services.charging.preferredChargeMode missing -> charging.preferred_mode None', vin)
+                                vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
+                                LOG_API.info('VIN %s: services.charging.preferredChargeMode missing -> charging.preferred_mode UNKNOWN', vin)
                         if 'active' in charging_status:
                             if charging_status['active'] is not None:
                                 vehicle.charging.enabled = bool(charging_status['active'])
@@ -1451,13 +1451,13 @@ class Connector(BaseConnector):
                                 charge_mode = SeatCupraCharging.SeatCupraChargeMode(charging_data['mode'])
                             except ValueError:
                                 LOG_API.info('Unknown charge mode %s', charging_data['mode'])
-                                vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                                vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                             else:
                                 vehicle.charging.mode._set_value(charge_mode)  # pylint: disable=protected-access
                         else:
-                            LOG_API.info('VIN %s: charging.status.mode is None -> charging.mode None', vin)
+                            LOG_API.info('VIN %s: charging.status.mode is None -> charging.mode UNKNOWN', vin)
                             self._debug_log_payload_once(vin, 'charging.status', data)
-                            vehicle.charging.mode._set_value(None)  # pylint: disable=protected-access
+                            vehicle.charging.mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                     if hasattr(vehicle.charging, 'preferred_mode'):
                         if 'preferredChargeMode' in charging_data and charging_data['preferredChargeMode'] is not None:
                             try:
@@ -1468,9 +1468,9 @@ class Connector(BaseConnector):
                             else:
                                 vehicle.charging.preferred_mode._set_value(preferred_mode)  # pylint: disable=protected-access
                         else:
-                            LOG_API.info('VIN %s: charging.status.preferredChargeMode missing/None -> preferred_mode None', vin)
+                            LOG_API.info('VIN %s: charging.status.preferredChargeMode missing/None -> preferred_mode UNKNOWN', vin)
                             self._debug_log_payload_once(vin, 'charging.status', data)
-                            vehicle.charging.preferred_mode._set_value(None)  # pylint: disable=protected-access
+                            vehicle.charging.preferred_mode._set_value(SeatCupraCharging.SeatCupraChargeMode.UNKNOWN)  # pylint: disable=protected-access
                     if 'chargedPowerInKw' in charging_data and charging_data['chargedPowerInKw'] is not None:
                         try:
                             charged_power = float(charging_data['chargedPowerInKw'])
