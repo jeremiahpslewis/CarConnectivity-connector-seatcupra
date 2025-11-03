@@ -1177,7 +1177,7 @@ class Connector(BaseConnector):
                         climatization_state = Climatization.ClimatizationState.UNKNOWN
                     vehicle.climatization.state._set_value(value=climatization_state, measured=captured_at)  # pylint: disable=protected-access
                 else:
-                    vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
+                    vehicle.climatization.state._set_value(Climatization.ClimatizationState.UNKNOWN, measured=captured_at)  # pylint: disable=protected-access
                 if 'remainingClimatisationTimeInMinutes' in climatisation_status and climatisation_status['remainingClimatisationTimeInMinutes'] is not None:
                     try:
                         remaining_minutes = float(climatisation_status['remainingClimatisationTimeInMinutes'])
@@ -1214,7 +1214,7 @@ class Connector(BaseConnector):
                     }
                 )
             else:
-                vehicle.climatization.state._set_value(None)  # pylint: disable=protected-access
+                vehicle.climatization.state._set_value(Climatization.ClimatizationState.UNKNOWN)  # pylint: disable=protected-access
             if 'windowHeatingStatus' in data and data['windowHeatingStatus'] is not None:
                 window_heating_status: Dict = data['windowHeatingStatus']
                 if 'carCapturedTimestamp' not in window_heating_status or window_heating_status['carCapturedTimestamp'] is None:
@@ -1394,7 +1394,7 @@ class Connector(BaseConnector):
                             charging_state = Charging.ChargingState.UNKNOWN
                         vehicle.charging.state._set_value(value=charging_state)  # pylint: disable=protected-access
                     else:
-                        vehicle.charging.state._set_value(None)  # pylint: disable=protected-access
+                        vehicle.charging.state._set_value(Charging.ChargingState.UNKNOWN)  # pylint: disable=protected-access
                     if 'type' in charging_data:
                         if charging_data['type'] is not None:
                             if charging_data['type'] in [item.value for item in Charging.ChargingType]:
