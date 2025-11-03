@@ -1483,7 +1483,8 @@ class Connector(BaseConnector):
                             plug_state = ChargingConnector.ChargingConnectorConnectionState.UNKNOWN
                         vehicle.charging.connector.connection_state._set_value(value=plug_state)  # pylint: disable=protected-access
                     else:
-                        vehicle.charging.connector.connection_state._set_value(value=None)  # pylint: disable=protected-access
+                        vehicle.charging.connector.connection_state._set_value(
+                            value=ChargingConnector.ChargingConnectorConnectionState.UNKNOWN)  # pylint: disable=protected-access
                     if 'externalPower' in data['plug'] and data['plug']['externalPower'] is not None:
                         if data['plug']['externalPower'] in [item.value for item in ChargingConnector.ExternalPower]:
                             plug_power_state: ChargingConnector.ExternalPower = \
@@ -1496,7 +1497,7 @@ class Connector(BaseConnector):
                                 plug_power_state = ChargingConnector.ExternalPower.UNKNOWN
                         vehicle.charging.connector.external_power._set_value(value=plug_power_state)  # pylint: disable=protected-access
                     else:
-                        vehicle.charging.connector.external_power._set_value(None)  # pylint: disable=protected-access
+                        vehicle.charging.connector.external_power._set_value(ChargingConnector.ExternalPower.UNKNOWN)  # pylint: disable=protected-access
                     if 'lock' in data['plug'] and data['plug']['lock'] is not None:
                         if data['plug']['lock'] in [item.value for item in ChargingConnector.ChargingConnectorLockState]:
                             plug_lock_state: ChargingConnector.ChargingConnectorLockState = \
@@ -1506,7 +1507,7 @@ class Connector(BaseConnector):
                             plug_lock_state = ChargingConnector.ChargingConnectorLockState.UNKNOWN
                         vehicle.charging.connector.lock_state._set_value(value=plug_lock_state)  # pylint: disable=protected-access
                     else:
-                        vehicle.charging.connector.lock_state._set_value(None)  # pylint: disable=protected-access
+                        vehicle.charging.connector.lock_state._set_value(ChargingConnector.ChargingConnectorLockState.UNKNOWN)  # pylint: disable=protected-access
                     log_extra_keys(LOG_API, 'plug', data['plug'], {'connection', 'externalPower', 'lock'})
                 log_extra_keys(LOG_API, f'https://ola.prod.code.seat.cloud.vwgroup.com/v1/vehicles/{vin}/charging/status', data,
                                {'state', 'battery', 'charging', 'plug'})
